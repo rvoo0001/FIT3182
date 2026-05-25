@@ -40,4 +40,11 @@ GitHub Copilot (Claude Sonnet 4.6) was used to assist with implementation, debug
 The prompts included requests for guidance on implementing the Spark Structured Streaming pipeline, designing the MongoDB collection schema and sink pattern, implementing the three Kafka producer notebooks, and developing the visualisation charts. In addition, AI was used to support the drafting of notebook documentation cells and the README by generating technical explanations based on the implemented code.
 All generated outputs were carefully reviewed, modified, and validated. The final submitted code and documentation reflect our own understanding and have been tested to ensure correctness and compliance with the assignment requirements.
 
+**Representative prompts used:**
+- *"Design a MongoDB schema for a daily violation document using an embedded array and `$push` upsert pattern."*
+- *"Implement three Kafka producer notebooks that read camera event CSVs, group rows by `batch_id`, and publish to separate Kafka topics with a scaled sleep interval."*
+- *"Implement a Spark Structured Streaming pipeline with a time-bounded stream-stream join on `car_plate` to detect average-speed violations, and write results to MongoDB using `foreachBatch`."*
+- *"Generate four visualisation chart functions with consistent styling and arrow-callout annotations for peak, trough, and notable speed events."*
+- *"Draft documentation cells explaining the watermark delay, join window justification, and sleep time scaling formula for each producer."*
+
 
