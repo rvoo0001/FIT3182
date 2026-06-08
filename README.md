@@ -6,28 +6,43 @@
 This project implements a Spark Structured Streaming pipeline that consumes three Kafka topics (`camera-events-A`, `camera-events-B`, `camera-events-C`), detects instantaneous and average-speed violations, and writes per-vehicle daily violation documents to MongoDB (`fit3182_db.violation`). The streaming application and data-model are implemented in `src/34080678_33590982_data_design_streaming.ipynb`. Visualization work is in `src/34080678_33590982_visualisation.ipynb`.
 
 ## Quick Start / Prerequisites
-- Docker running locally (MongoDB and Kafka producers run in containers).
-- A PySpark environment (the notebook sets `PYSPARK_SUBMIT_ARGS` for Kafka packages).
-- Python 3.x, `pandas`, `pymongo`, `pyspark` (as used in notebooks).
+- Docker + Docker Compose (runs Kafka, MongoDB, and a Jupyter/PySpark environment in one stack — see **Running with Docker Compose** below).
 - Ensure Kafka producers (`producer_a`, `producer_b`, `producer_c`) are running before starting the streaming notebook.
 
-## Configuration (what to edit)
-- MongoDB IP: run on host machine:
-  - `docker inspect "container_name" --format "{{.NetworkSettings.IPAddress}}"`
-  - Set `MONGO_HOST` and `MONGO_PORT` in `src/34080678_33590982_data_design_streaming.ipynb`.
-- Producers host IP (Windows): run `ipconfig` → copy the IPv4 address → set `HOST_IP` in each producer script.
-- Data directory: update `DATA_DIR` in notebooks if your project paths differ.
-- Join window and watermark defaults are in the notebook:
-  - `WATERMARK_DELAY = "30 minutes"`
-  - `JOIN_WINDOW = "45 seconds"` (tune as needed; see notes below)
-- To start fresh, optionally clear checkpoint folder before running the stream:
-  - Python: `shutil.rmtree("./checkpoints/violations", ignore_errors=True)`
+## Running with Docker Compose
+The whole stack — **Kafka** (KRaft mode, no Zookeeper), **MongoDB**, and a **Jupyter/PySpark** environment with the notebooks mounted — is defined in `docker-compose.yml`. All configuration (hosts, ports, topic names, data paths, streaming parameters) is centralised in a single `.env` file that both `docker-compose.yml` and the notebooks read (via `python-dotenv`), so nothing needs to be hand-edited per machine anymore.
+
+1. Copy the example environment file and adjust values if needed:
+   ```
+   cp .env.example .env
+   ```
+2. Build and start the stack:
+   ```
+   docker compose up -d --build
+   ```
+3. Open Jupyter at `http://<host-ip>:8888` (default port from `.env`'s `JUPYTER_PORT`). On a cloud VM (e.g. Oracle Cloud), use the instance's public/private IP and make sure the VCN security list / NSG allows ingress on that port.
+4. Run the notebooks from `src/` in order (see **How to run** below) — they resolve Kafka and MongoDB via the in-network service names `kafka` and `mongodb`.
+5. Stop the stack with `docker compose down` (add `-v` to also remove the persisted Kafka/MongoDB/checkpoint volumes).
+
+**Key `.env` variables** (see `.env.example` for the full list and defaults):
+| Variable | Purpose |
+|---|---|
+| `MONGO_HOST` / `MONGO_PORT` / `DB_NAME` | MongoDB connection (defaults to the `mongodb` compose service) |
+| `KAFKA_HOST` / `KAFKA_PORT` | Kafka bootstrap server (defaults to the `kafka` compose service) |
+| `TOPIC_A` / `TOPIC_B` / `TOPIC_C` | Kafka topic names for each producer |
+| `DATA_DIR` | Container-internal data directory (bind-mounted from `./data`) |
+| `WATERMARK_DELAY` / `JOIN_WINDOW` / `JOIN_WINDOW_SECONDS` | Streaming state parameters |
+| `BATCH_SLEEP_A` / `BATCH_SLEEP_B` / `BATCH_SLEEP_C` | Producer batch cadence (seconds) |
+| `JUPYTER_PORT` / `MONGO_EXPOSED_PORT` / `KAFKA_EXPOSED_PORT` | Host-side port mappings |
 
 ## How to run
-1. Start MongoDB and Kafka producers (Docker).
+1. Start the stack with Docker Compose (see above) — Kafka and MongoDB come up automatically.
 2. Confirm `camera` and `vehicle` collections are created by running the Task 1 cells in `src/34080678_33590982_data_design_streaming.ipynb`.
-3. Run Task 2 cells to start the Spark streaming job (ensure producers are publishing).
-4. Stop the stream with a kernel interrupt or programmatic `query.stop()`.
+3. Start Kafka producers (`producer_a`, `producer_b`, `producer_c`) so events begin flowing.
+4. Run Task 2 cells to start the Spark streaming job.
+5. Stop the stream with a kernel interrupt or programmatic `query.stop()`.
+6. To start fresh, optionally clear the checkpoint folder before re-running the stream:
+   - Python: `shutil.rmtree("./checkpoints/violations", ignore_errors=True)`
 
 ## Important design notes
 - Join semantics: average-speed detection uses time-bounded inner joins on `car_plate` with an ordering constraint (`a.event_time < b.event_time`) and `b.event_time <= a.event_time + interval JOIN_WINDOW`. `batch_id` is not used for joins.

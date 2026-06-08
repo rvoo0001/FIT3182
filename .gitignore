@@ -1,0 +1,13 @@
+# Local environment config (copy from .env.example)
+.env
+
+# Notebook checkpoints
+src/.ipynb_checkpoints/
+**/.ipynb_checkpoints/
+
+# Spark structured streaming checkpoints
+checkpoints/
+
+# Docker volume data (bind-mounted to host for persistence)
+mongo-data/
+kafka-data/
