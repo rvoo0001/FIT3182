@@ -44,6 +44,71 @@ The whole stack — **Kafka** (KRaft mode, no Zookeeper), **MongoDB**, and a **J
 6. To start fresh, optionally clear the checkpoint folder before re-running the stream:
    - Python: `shutil.rmtree("./checkpoints/violations", ignore_errors=True)`
 
+## Deploying to an AWS EC2 Instance
+The stack can also be deployed to a cloud VM such as an AWS EC2 instance so the notebooks and Spark UI are reachable over the internet.
+
+1. **Create a free-tier AWS account** and sign in to the EC2 console.
+2. **Launch an instance**, making sure to create (or select) a **key pair** — you'll need the `.pem` file to connect over SSH.
+3. **Connect to the instance**, either:
+   - via the AWS console's **Connect** button (browser-based SSH), or
+   - via a terminal using the key pair you saved:
+     ```
+     ssh -i "/path/to/your-key.pem" ec2-user@<ec2-public-ip>
+     ```
+4. **Update the system and install Docker:**
+   ```
+   sudo dnf update -y
+   sudo dnf install docker -y
+   ```
+5. **Start and enable Docker:**
+   ```
+   sudo systemctl enable docker
+   sudo systemctl start docker
+   docker --version
+   ```
+6. **Install the Docker Buildx and Compose CLI plugins:**
+   ```
+   mkdir -p ~/.docker/cli-plugins/
+
+   curl -SL https://github.com/docker/buildx/releases/download/v0.17.0/buildx-v0.17.0.linux-amd64 \
+     -o ~/.docker/cli-plugins/docker-buildx
+   chmod +x ~/.docker/cli-plugins/docker-buildx
+
+   curl -SL https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64 \
+     -o ~/.docker/cli-plugins/docker-compose
+   chmod +x ~/.docker/cli-plugins/docker-compose
+
+   docker buildx version
+   ```
+7. **Add your user to the `docker` group** so you don't need `sudo` for every Docker command:
+   ```
+   sudo usermod -aG docker $USER
+   ```
+8. **Install Git and clone the repository:**
+   ```
+   sudo dnf install git -y
+   git --version
+
+   git clone https://github.com/rvoo0001/FIT3182.git
+   cd FIT3182
+   git pull
+   ```
+9. **Create your `.env` file from the example** and verify it:
+   ```
+   cp .env.example .env
+   ls -la
+   cat .env
+   ```
+10. **Build and start the stack:**
+    ```
+    docker compose up -d --build
+    ```
+11. **Access the running services:**
+    - Jupyter Notebook: http://43.216.253.136:8888 (token: `0bec4c3fd4c4f0b7fa9bfeeb5a7124368738ad1c97ba7d8f` — stays the same every time)
+    - Spark UI: http://43.216.253.136:4040 (only reachable once the streaming application is running)
+
+    > Make sure the EC2 **security group** allows inbound traffic on these ports (8888, 4040, and any others from `.env`) from your IP or `0.0.0.0/0` for testing.
+
 ## Important design notes
 - Join semantics: average-speed detection uses time-bounded inner joins on `car_plate` with an ordering constraint (`a.event_time < b.event_time`) and `b.event_time <= a.event_time + interval JOIN_WINDOW`. `batch_id` is not used for joins.
 - Sink semantics: `foreachBatch` uses `update_one(..., upsert=True)` with `$push` to append violation events into a daily document keyed by `(car_plate, date)`. Top-level document duplication is prevented by a compound unique index, but event-level duplicates (e.g. on Spark retry) are possible unless you add de-duplication logic (e.g. use `event_id` and check before `$push`).
