@@ -114,6 +114,45 @@ The stack can also be deployed to a cloud VM such as an AWS EC2 instance so the 
 - Sink semantics: `foreachBatch` uses `update_one(..., upsert=True)` with `$push` to append violation events into a daily document keyed by `(car_plate, date)`. Top-level document duplication is prevented by a compound unique index, but event-level duplicates (e.g. on Spark retry) are possible unless you add de-duplication logic (e.g. use `event_id` and check before `$push`).
 - Tuning `JOIN_WINDOW`: default `60 seconds` captures vehicles averaging ≥60 km/h over the 1 km segment (good for stricter, low-noise detection). Increasing to `300s` (5 min) captures slower vehicles but increases state and false matches.
 
+## Performance & Scalability Testing
+`src/34080678_33590982_data_design_streaming.ipynb` includes a self-contained scalability/throughput/latency experiment (Task 2 cells) used to evaluate the pipeline against the performance-analysis criteria.
+
+### How it works
+- Set `RUN_SCALABILITY_TEST = True` (default `False`) to enable the experiment — when `False`, the notebook behaves exactly like the normal workflow and the cell is a no-op.
+- The test runs the **full pipeline three times**, once per entry in `SCALABILITY_BATCH_LIMITS = [10, 20, 40]` (doubling input volume each run). For each run it:
+  1. Stops any active Spark queries and clears the checkpoint (`./checkpoints/violations`) for a fresh Kafka offset subscription.
+  2. Optionally clears the `violation` collection (`CLEAR_OUTPUT_BEFORE_EACH_RUN`) so each run's results are isolated.
+  3. Starts a fresh streaming query (instantaneous detection + A→B and B→C average-speed joins).
+  4. Runs producers A, B, and C in background threads, restricted to `batch_id` 1..N.
+  5. Waits for the producers to finish, then a `DRAIN_BUFFER_SECS` (180s) buffer so in-flight micro-batches and watermark-bound joins can complete and flush to MongoDB.
+  6. Stops the query and records metrics for that run.
+
+### Metrics captured (per run)
+| Metric | Definition |
+|---|---|
+| `input_records` | Total camera events sent across all three producers |
+| `processing_time_s` | Wall-clock time for the run (start → end of drain buffer) |
+| `throughput_rec_s` | `input_records / processing_time_s` |
+| `violation_count` | Violations written to MongoDB during the run |
+| `avg/min/max_latency_ms` | End-to-end latency per violation: `written_at` (MongoDB sink) − `produced_at` (Kafka producer timestamp) |
+
+Results are saved to `src/performance_results.csv` and displayed as a summary table by the following cell, ready to copy into a report or slides.
+
+### Findings
+The test was run on both a local machine (Windows + Docker Desktop) and the deployed AWS EC2 instance:
+
+| Input Records | AWS throughput (rec/s) | Local throughput (rec/s) | AWS avg latency | Local avg latency |
+|---|---|---|---|---|
+| 240 | 1.02 | 1.10 | 64.5s | 163.5s |
+| 467 | 1.65 | 1.70 | 51.5s | 132.8s |
+| 930 | 2.42 | 2.60 | 47.4s | 128.4s |
+
+- **Scalability**: violation counts scale roughly linearly with input volume on both environments, confirming the join/detection logic is `O(n)`.
+- **Throughput**: comparable between AWS and local — bounded by the controlled producer cadence and drain buffer, not infrastructure.
+- **Latency**: AWS is consistently 2.5–2.7x lower than local. This is caused by Spark's per-micro-batch checkpoint commits (`./checkpoints/violations`), which live on the Docker bind-mounted `./src` directory. On AWS (native Linux Docker), these writes are near-native; on Windows (Docker Desktop/WSL2), each write crosses a translation layer to the host NTFS filesystem, slowing the micro-batch trigger loop and increasing end-to-end latency. MongoDB write performance is not a factor, since its data lives in a Docker named volume on both environments.
+
+See the "Performance Evaluation — Discussion" markdown cell in the notebook for the full write-up.
+
 ## Generative AI Usage Declaration
 
 GitHub Copilot (Claude Sonnet 4.6) was used to assist with implementation, debugging, and documentation preparation.

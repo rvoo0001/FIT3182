@@ -1,4 +1,4 @@
 run_id,test_label,max_batch_id,input_records,start_time,end_time,processing_time_s,throughput_rec_s,violation_count,avg_latency_ms,min_latency_ms,max_latency_ms,latency_samples,status
-b20baecb,batch_10,10,240,2026-06-10 08:17:57 UTC,2026-06-10 08:21:38 UTC,221.54,1.08,110,160587.1,132177.9,175587.2,156,completed
-cbf82c42,batch_20,20,467,2026-06-10 08:22:12 UTC,2026-06-10 08:26:46 UTC,273.57,1.71,229,148789.5,93130.3,182465.0,309,completed
-ef899a95,batch_40,40,930,2026-06-10 08:27:20 UTC,2026-06-10 08:28:17 UTC,56.94,16.33,0,,,,0,timeout
+4edcf1ea,batch_10,10,240,2026-06-10 08:38:43 UTC,2026-06-10 08:42:21 UTC,217.94,1.1,88,163499.7,93759.5,177106.2,94,completed
+62f296ae,batch_20,20,467,2026-06-10 08:42:45 UTC,2026-06-10 08:47:19 UTC,273.96,1.7,229,132756.3,78819.2,163659.5,309,completed
+7e7de0e9,batch_40,40,930,2026-06-10 08:47:42 UTC,2026-06-10 08:53:40 UTC,358.38,2.6,437,128368.3,76065.2,160319.6,590,completed
